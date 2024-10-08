@@ -10,10 +10,13 @@ import PyPDF2
 import google.generativeai as genai
 import tempfile
 from docx2pdf import convert
+from dotenv import load_dotenv
+
 
 
 # Configure the Gemini API with the key (replace with your actual API key)
-GEMINI_API_KEY = "AIzaSyAh1CxfDouDYBIz5l6Ia0MSt-jeM5HtJmI"
+load_dotenv()  # Load environment variables from .env file
+GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
 genai.configure(api_key=GEMINI_API_KEY)
 
 # Initialize Gemini model
