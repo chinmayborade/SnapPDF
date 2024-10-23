@@ -12,9 +12,13 @@ import tempfile
 from pdf2docx import parse
 from dotenv import load_dotenv
 from PyPDF2 import PdfMerger
+from docx2pdf import convert
 import fitz
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
+import time
+import base64
+
 
 
 
@@ -456,65 +460,140 @@ if uploaded_pdf_split is not None:
     except Exception as e:
         st.error(f"Error reading PDF: {str(e)}")
 
-# 5. PDF Compression Section
+# PDF Compression Section
 st.markdown("---")
 st.markdown('<h2 class="fade-in">PDF Compressor</h2>', unsafe_allow_html=True)
+
+
+def compress_pdf(input_path, output_path, compression_level):
+    """
+    Compress PDF based on compression level (1-5)
+    1: Minimal compression
+    2: Low compression
+    3: Medium compression
+    4: High compression
+    5: Maximum compression
+    """
+    doc = fitz.open(input_path)
+
+    # Define compression parameters based on level
+    compression_params = {
+        1: {"garbage": 1, "clean": True, "deflate": True, "linear": False},
+        2: {"garbage": 2, "clean": True, "deflate": True, "linear": True},
+        3: {"garbage": 3, "clean": True, "deflate": True, "linear": True},
+        4: {"garbage": 4, "clean": True, "deflate": True, "linear": True},
+        5: {
+            "garbage": 4,
+            "clean": True,
+            "deflate": True,
+            "linear": True,
+            "pretty": False,
+            "sanitize": True,
+        }
+    }
+
+    # Apply compression based on level
+    params = compression_params[compression_level]
+
+    # Additional compression for images if level is high
+    if compression_level >= 4:
+        for page_num in range(len(doc)):
+            page = doc[page_num]
+            img_list = page.get_images()
+
+            for img_index, img in enumerate(img_list):
+                xref = img[0]
+                try:
+                    base_image = doc.extract_image(xref)
+                    if base_image:
+                        image_data = base_image["image"]
+                        # Convert to PIL Image
+                        image = Image.open(io.BytesIO(image_data))
+
+                        # Determine quality based on compression level
+                        quality = 60 if compression_level == 4 else 40  # Level 5 uses more aggressive compression
+
+                        # Save with compression
+                        output_buffer = io.BytesIO()
+                        image.save(output_buffer, format="JPEG", quality=quality, optimize=True)
+
+                        # Replace image in PDF
+                        doc.replace_image(xref, output_buffer.getvalue())
+                except Exception as e:
+                    continue  # Skip problematic images
+
+    # Save the compressed PDF
+    doc.save(output_path, **params)
+    doc.close()
+    return output_path
+
 
 uploaded_pdf_compress = st.file_uploader("Choose a PDF to compress", type="pdf", key="pdf_compress")
 
 if uploaded_pdf_compress is not None:
-    compression_level = st.slider("Select compression level", 1, 5, 3)
+    compression_level = st.slider("Select compression level (1: Minimal, 5: Maximum)", 1, 5, 3)
+
+    st.info("""
+    Compression Levels:
+    - Level 1: Minimal compression (Best quality)
+    - Level 2: Low compression
+    - Level 3: Medium compression (Balanced)
+    - Level 4: High compression
+    - Level 5: Maximum compression (Smallest file size)
+    """)
 
     if st.button("Compress PDF"):
         with st.spinner('Compressing PDF...'):
             try:
-                # Save uploaded PDF temporarily
-                with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as tmp_file:
-                    tmp_file.write(uploaded_pdf_compress.getvalue())
-                    pdf_path = tmp_file.name
+                # Create temporary files for input and output
+                with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as input_tmp:
+                    input_tmp.write(uploaded_pdf_compress.getvalue())
+                    input_path = input_tmp.name
 
-                # Open the PDF with PyMuPDF
-                doc = fitz.open(pdf_path)
+                output_path = tempfile.NamedTemporaryFile(delete=False, suffix='.pdf').name
 
-                # Save with compression
-                doc.save(
-                    "compressed.pdf",
-                    garbage=4,  # garbage collection
-                    deflate=True,  # compress streams
-                    clean=True,  # clean content
-                    linear=True  # optimize for web
-                )
-                doc.close()
+                # Compress the PDF
+                compress_pdf(input_path, output_path, compression_level)
 
-                # Create download link
-                with open("compressed.pdf", "rb") as f:
-                    pdf_content = f.read()
-
+                # Get file sizes
                 original_size = len(uploaded_pdf_compress.getvalue())
-                compressed_size = len(pdf_content)
+
+                with open(output_path, 'rb') as f:
+                    compressed_content = f.read()
+                compressed_size = len(compressed_content)
+
+                # Calculate reduction percentage
                 reduction = ((original_size - compressed_size) / original_size) * 100
 
-                st.write(f"Original size: {original_size / 1024:.2f} KB")
-                st.write(f"Compressed size: {compressed_size / 1024:.2f} KB")
-                st.write(f"Size reduction: {reduction:.1f}%")
+                # Display compression results
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.metric("Original Size", f"{original_size / 1024:.1f} KB")
+                with col2:
+                    st.metric("Compressed Size", f"{compressed_size / 1024:.1f} KB")
+                with col3:
+                    st.metric("Reduction", f"{reduction:.1f}%")
 
-                download_link = create_download_link(pdf_content, "compressed_document.pdf")
+                # Create download link
+                download_link = create_download_link(compressed_content, "compressed_document.pdf")
                 st.success("PDF compressed successfully!")
                 st.markdown(download_link, unsafe_allow_html=True)
                 st.balloons()
 
-                # Cleanup
-                os.unlink(pdf_path)
-                os.unlink("compressed.pdf")
+                # Cleanup temporary files
+                os.unlink(input_path)
+                os.unlink(output_path)
 
             except Exception as e:
                 st.error(f"Error during compression: {str(e)}")
+                st.error("Please make sure the PDF is not encrypted and is valid.")
+
 
 # 3. PDF Watermark Section
 st.markdown("---")
 st.markdown('<h2 class="fade-in">PDF Watermarker</h2>', unsafe_allow_html=True)
 
-uploaded_pdf_watermark = st.file_uploader("Choose a PDF to watermark", type="pdf", key="pdf_watermark")
+uploaded_pdf_watermark = st.file_uploader("Choose  a PDF to watermark", type="pdf", key="pdf_watermark")
 watermark_text = st.text_input("Enter watermark text:")
 watermark_color = st.color_picker("Choose watermark color", "#808080")
 
