@@ -19,6 +19,12 @@ from reportlab.lib.pagesizes import letter
 import time
 import base64
 import pdf2image
+import pypandoc
+from reportlab.lib.pagesizes import letter
+from reportlab.pdfgen import canvas
+import docx
+
+
 
 
 
@@ -253,6 +259,52 @@ if uploaded_images:
             except Exception as e:
                 st.error(f"Error: {str(e)}")
 
+
+def convert_docx_to_pdf(docx_path, pdf_path):
+    """Convert DOCX to PDF using python-docx and reportlab"""
+    doc = docx.Document(docx_path)
+    pdf = canvas.Canvas(pdf_path, pagesize=letter)
+
+    # Default settings
+    pdf.setFont("Helvetica", 12)
+    y = 750  # Starting y position
+
+    for para in doc.paragraphs:
+        if y <= 50:  # Check if we need a new page
+            pdf.showPage()
+            y = 750
+
+        text = para.text
+        if text.strip():  # Only process non-empty paragraphs
+            # Split long paragraphs into multiple lines
+            words = text.split()
+            lines = []
+            current_line = []
+
+            for word in words:
+                current_line.append(word)
+                if len(' '.join(current_line)) > 70:  # Adjust line width as needed
+                    lines.append(' '.join(current_line[:-1]))
+                    current_line = [word]
+
+            if current_line:
+                lines.append(' '.join(current_line))
+
+            # Write each line
+            for line in lines:
+                if y <= 50:  # Check if we need a new page
+                    pdf.showPage()
+                    pdf.setFont("Helvetica", 12)
+                    y = 750
+
+                pdf.drawString(50, y, line)
+                y -= 15  # Line spacing
+
+        y -= 5  # Paragraph spacing
+
+    pdf.save()
+
+
 st.markdown("---")
 st.markdown('<h2 class="fade-in">Doc to PDF</h2>', unsafe_allow_html=True)
 
@@ -271,7 +323,7 @@ if uploaded_doc is not None:
                     output_pdf_path = os.path.join(tmpdirname, "output.pdf")
 
                     # Convert the document to PDF
-                    convert(tmp_file_path, output_pdf_path)
+                    convert_docx_to_pdf(tmp_file_path, output_pdf_path)
 
                     st.success("Document converted to PDF successfully!")
 
