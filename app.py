@@ -82,6 +82,9 @@ st.markdown(
     unsafe_allow_html=True
 )
 
+#MainMenu {
+  visibility: hidden;
+}
 
 # Function to convert PDF to images and create a zip file
 def convert_pdf_to_images_zip(pdf_path):
