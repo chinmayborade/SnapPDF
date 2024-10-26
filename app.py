@@ -18,6 +18,7 @@ from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
 import time
 import base64
+import pdf2image
 
 
 
