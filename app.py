@@ -17,12 +17,14 @@ import fitz
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
 import time
+import docx2txt
 import base64
 import pdf2image
 import pypandoc
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
 import docx
+
 
 
 
@@ -81,7 +83,6 @@ st.markdown("""
 </style>
 """,
 unsafe_allow_html=True)
-
 
 
 # Function to convert PDF to images and create a zip file
@@ -261,84 +262,93 @@ if uploaded_images:
 
 
 def convert_docx_to_pdf(docx_path, pdf_path):
-    """Convert DOCX to PDF using python-docx and reportlab"""
-    doc = docx.Document(docx_path)
-    pdf = canvas.Canvas(pdf_path, pagesize=letter)
+    """Convert DOCX to PDF using docx2txt and fpdf2"""
+    try:
+        # Extract text from DOCX
+        text = docx2txt.process(docx_path)
 
-    # Default settings
-    pdf.setFont("Helvetica", 12)
-    y = 750  # Starting y position
+        # Create PDF
+        pdf = FPDF()
+        pdf.add_page()
+        pdf.set_auto_page_break(auto=True, margin=15)
 
-    for para in doc.paragraphs:
-        if y <= 50:  # Check if we need a new page
-            pdf.showPage()
-            y = 750
+        # Set font - using Arial (built-in)
+        pdf.set_font("Arial", size=12)
 
-        text = para.text
-        if text.strip():  # Only process non-empty paragraphs
-            # Split long paragraphs into multiple lines
-            words = text.split()
-            lines = []
-            current_line = []
+        # Split text into lines and add to PDF
+        lines = text.split('\n')
+        for line in lines:
+            try:
+                # Handle special characters
+                clean_line = ''.join(char if ord(char) < 128 else ' ' for char in line)
+                if clean_line.strip():  # Only add non-empty lines
+                    pdf.multi_cell(0, 10, clean_line)
+            except Exception as e:
+                continue  # Skip problematic lines
 
-            for word in words:
-                current_line.append(word)
-                if len(' '.join(current_line)) > 70:  # Adjust line width as needed
-                    lines.append(' '.join(current_line[:-1]))
-                    current_line = [word]
+        # Save PDF
+        pdf.output(pdf_path)
+        return True
+    except Exception as e:
+        st.error(f"Conversion error: {str(e)}")
+        return False
 
-            if current_line:
-                lines.append(' '.join(current_line))
 
-            # Write each line
-            for line in lines:
-                if y <= 50:  # Check if we need a new page
-                    pdf.showPage()
-                    pdf.setFont("Helvetica", 12)
-                    y = 750
-
-                pdf.drawString(50, y, line)
-                y -= 15  # Line spacing
-
-        y -= 5  # Paragraph spacing
-
-    pdf.save()
-
+# Page config
 
 st.markdown("---")
-st.markdown('<h2 class="fade-in">Doc to PDF</h2>', unsafe_allow_html=True)
+st.markdown('<h2 style="text-align: center;">Doc to PDF Converter</h2>', unsafe_allow_html=True)
 
-uploaded_doc = st.file_uploader("Choose a Word document (.doc or .docx)", type=["doc", "docx"], key="doc_uploader")
+# File uploader with clear instructions
+uploaded_doc = st.file_uploader(
+    "Choose a Word document (.doc or .docx)",
+    type=["doc", "docx"],
+    help="Upload a Microsoft Word document to convert it to PDF"
+)
 
 if uploaded_doc is not None:
-    with tempfile.NamedTemporaryFile(delete=False, suffix=uploaded_doc.name) as tmp_file:
-        tmp_file.write(uploaded_doc.getvalue())
-        tmp_file_path = tmp_file.name
+    # Show file details
+    st.write(f"File: {uploaded_doc.name}")
 
-    if st.button("Convert Doc to PDF"):
-        with st.spinner('Converting Doc to PDF...'):
+    if st.button("Convert to PDF"):
+        with st.spinner('Converting your document to PDF...'):
             try:
-                # Create a temporary directory for the output PDF
+                # Create temporary files
+                with tempfile.NamedTemporaryFile(delete=False, suffix=uploaded_doc.name) as tmp_file:
+                    tmp_file.write(uploaded_doc.getvalue())
+                    tmp_file_path = tmp_file.name
+
                 with tempfile.TemporaryDirectory() as tmpdirname:
                     output_pdf_path = os.path.join(tmpdirname, "output.pdf")
 
-                    # Convert the document to PDF
-                    convert_docx_to_pdf(tmp_file_path, output_pdf_path)
+                    # Convert the document
+                    success = convert_docx_to_pdf(tmp_file_path, output_pdf_path)
 
-                    st.success("Document converted to PDF successfully!")
+                    if success:
+                        # Create download button
+                        with open(output_pdf_path, "rb") as pdf_file:
+                            pdf_content = pdf_file.read()
 
-                    # Create download link for the generated PDF
-                    with open(output_pdf_path, "rb") as pdf_file:
-                        pdf_content = pdf_file.read()
-                    download_link = create_download_link(pdf_content, "converted_document.pdf")
-                    st.markdown(download_link, unsafe_allow_html=True)
-                    st.balloons()
+                        st.success("✅ Conversion successful!")
+                        download_link = create_download_link(pdf_content, f"{uploaded_doc.name.rsplit('.', 1)[0]}.pdf")
+                        st.markdown(download_link, unsafe_allow_html=True)
+                        st.balloons()
+                    else:
+                        st.error("Conversion failed. Please try again with a different file.")
 
             except Exception as e:
-                st.error(f"Error: {str(e)}")
+                st.error(f"An error occurred: {str(e)}")
             finally:
-                # Clean up the temporary input file
-                os.unlink(tmp_file_path)
+                # Clean up
+                try:
+                    os.unlink(tmp_file_path)
+                except:
+                    pass
+
+else:
+    st.info("👆 Upload a document to get started!")
+
+
 
 # Add PDF to DOC section
 st.markdown("---")
