@@ -82,9 +82,15 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-#MainMenu {
+
+
+# Add custom CSS to hide the GitHub icon
+hide_github_icon = """
+#GithubIcon {
   visibility: hidden;
 }
+"""
+st.markdown(hide_github_icon, unsafe_allow_html=True)
 
 # Function to convert PDF to images and create a zip file
 def convert_pdf_to_images_zip(pdf_path):
