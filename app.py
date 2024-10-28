@@ -163,7 +163,7 @@ def createWatermark(text, color):
 
 # Streamlit App
 st.markdown(
-    '<h1 class="fade-in" style="text-align: center; font-size: 65px;">SnapPDF</h1>',
+    '<h1 class="fade-in" style="text-align: center; font-size: 65px;">PDFGenie</h1>',
     unsafe_allow_html=True
 )
 st.markdown("---")
@@ -297,7 +297,7 @@ def convert_docx_to_pdf(docx_path, pdf_path):
 # Page config
 
 st.markdown("---")
-st.markdown('<h2 style="text-align: center;">Doc to PDF Converter</h2>', unsafe_allow_html=True)
+st.markdown('<h2 class="fade-in">Doc To PDF</h2>', unsafe_allow_html=True)
 
 # File uploader with clear instructions
 uploaded_doc = st.file_uploader(
